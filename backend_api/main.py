@@ -1,23 +1,28 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend_api.db import models, database
-from backend_api.routers import auth, users, categories, expenses, saving_plans, change_password, forgot_password
+from backend_api.db import database
+from backend_api.routers import (
+    auth,
+    users,
+    categories,
+    expenses,
+    saving_plans,
+    change_password,
+    forgot_password,
+)
 
 app = FastAPI(title="Xpense API")
 
-# ✅ CORS Middleware
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # ⚠️ For production, specify your frontend domain
+    allow_origins=["*"],  # restrict later in production
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# ✅ Create all tables
-models.Base.metadata.create_all(bind=database.engine)
-
-# ✅ Register routers
+# Routers
 app.include_router(auth.router)
 app.include_router(users.router)
 app.include_router(categories.router)

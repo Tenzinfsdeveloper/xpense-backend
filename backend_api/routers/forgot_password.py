@@ -5,6 +5,7 @@ from jose import jwt, JWTError
 from datetime import datetime, timedelta
 from email.message import EmailMessage
 import smtplib
+import os
 
 from backend_api.db.database import get_db
 from backend_api.db import models
@@ -15,10 +16,18 @@ from backend_api.routers.auth import get_password_hash
 # -------------------------------------------------------
 router = APIRouter(prefix="/auth", tags=["Password Reset"])
 
-RESET_SECRET_KEY = "xpense_reset_key_456"      # Change for production
+RESET_SECRET_KEY = os.getenv("RESET_SECRET_KEY")
 ALGORITHM = "HS256"
 RESET_TOKEN_EXPIRE_MINUTES = 30
 
+SMTP_EMAIL = os.getenv("SMTP_EMAIL")
+SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
+
+# Safety checks (fail fast)
+if not RESET_SECRET_KEY:
+    raise ValueError("RESET_SECRET_KEY is not set")
+if not SMTP_EMAIL or not SMTP_PASSWORD:
+    raise ValueError("SMTP_EMAIL or SMTP_PASSWORD is not set")
 
 # -------------------------------------------------------
 # Schemas
@@ -33,16 +42,16 @@ class ResetPasswordRequest(BaseModel):
 
 
 # -------------------------------------------------------
-# Helper: Create Token
+# Create reset token
 # -------------------------------------------------------
 def create_reset_token(email: str):
     expire = datetime.utcnow() + timedelta(minutes=RESET_TOKEN_EXPIRE_MINUTES)
-    data = {"sub": email, "exp": expire}
-    return jwt.encode(data, RESET_SECRET_KEY, algorithm=ALGORITHM)
+    payload = {"sub": email, "exp": expire}
+    return jwt.encode(payload, RESET_SECRET_KEY, algorithm=ALGORITHM)
 
 
 # -------------------------------------------------------
-# Helper: Verify Token
+# Verify reset token
 # -------------------------------------------------------
 def verify_reset_token(token: str):
     try:
@@ -53,13 +62,12 @@ def verify_reset_token(token: str):
 
 
 # -------------------------------------------------------
-# Helper: Send Email
+# Send reset email
 # -------------------------------------------------------
 def send_reset_email(to_email: str, reset_link: str):
-
     message = EmailMessage()
     message["Subject"] = "Reset Your XPense Password"
-    message["From"] = "xpense@app.com"
+    message["From"] = SMTP_EMAIL
     message["To"] = to_email
 
     message.set_content(
@@ -76,37 +84,36 @@ If you did not request this, you may safely ignore this email.
 """
     )
 
-    # Gmail SMTP
     smtp = smtplib.SMTP("smtp.gmail.com", 587)
     smtp.starttls()
-    smtp.login("tenzinfsdeveloper35@gmail.com", "cnvdzsxcmfgtiwbh")
+    smtp.login(SMTP_EMAIL, SMTP_PASSWORD)
     smtp.send_message(message)
     smtp.quit()
 
 
 # -------------------------------------------------------
-# Endpoint: Forgot Password (Send Link)
+# Forgot Password (Send Link)
 # -------------------------------------------------------
 @router.post("/forgot-password")
 def forgot_password(request: ForgotPasswordRequest, db: Session = Depends(get_db)):
 
     user = db.query(models.User).filter(models.User.email == request.email).first()
-
     if not user:
         raise HTTPException(status_code=404, detail="Email not registered")
 
     token = create_reset_token(request.email)
 
-    reset_link = f"https://regal-sorbet-c2cac0.netlify.app/reset_password.html?token={token}"
+    reset_link = (
+        f"https://regal-sorbet-c2cac0.netlify.app/reset_password.html?token={token}"
+    )
 
-    # Send email
     send_reset_email(request.email, reset_link)
 
     return {"message": "Password reset link sent to your email"}
 
 
 # -------------------------------------------------------
-# Endpoint: Reset Password
+# Reset Password
 # -------------------------------------------------------
 @router.post("/reset-password")
 def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db)):
@@ -117,7 +124,6 @@ def reset_password(request: ResetPasswordRequest, db: Session = Depends(get_db))
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    # Hash new password
     user.password = get_password_hash(request.new_password)
     db.commit()
 
