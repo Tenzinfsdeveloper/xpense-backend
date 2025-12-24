@@ -1,6 +1,10 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+
 from backend_api.db import database
+from backend_api.db.database import engine   # ✅ ADD
+from backend_api.db.models import Base       # ✅ ADD
+
 from backend_api.routers import (
     auth,
     users,
@@ -12,6 +16,9 @@ from backend_api.routers import (
 )
 
 app = FastAPI(title="Xpense API")
+
+# ✅ CREATE TABLES (RUNS ON STARTUP – TEMPORARY)
+Base.metadata.create_all(bind=engine)
 
 # CORS
 app.add_middleware(
