@@ -94,7 +94,7 @@ class SignupRequest(BaseModel):
     password: str
 
 
-@router.post("/signup")
+@router.post("/signup/")
 def signup(payload: SignupRequest, db: Session = Depends(database.get_db)):
     existing_user = db.query(models.User).filter(models.User.email == payload.email).first()
     if existing_user:
